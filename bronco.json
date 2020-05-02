@@ -1,0 +1,8 @@
+{
+  "mqtt_server_ip": "192.168.1.7",
+  "mqtt_port": 1883,
+  "mqtt_client_name": "trumpy_bridge",
+  "homie_device": "trumpy_bear",
+  "bridge_ip": "192.168.1.2",
+  "bridge_port": 8281
+}
