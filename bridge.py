@@ -1,9 +1,11 @@
 # 
 # Mqtt <-> mycroft message bus. Very incomplete. 
 # Very specific to my needs: Assumes homie and my hardware in it
-# which is also very specific and only *looks* compatible.
-# In particular, we turn the 'voice' part of mycroft on when we need it
-# and off when we don't. It's not a general purpose mycroft
+# which is also very specific and only *looks* homie compatible.
+# In particular, we turn on the 'voice' part of mycroft when we need it
+# and off when we don't. It's not a general purpose mycroft!
+#
+# It's a horrible mix of paho-mqtt, websocket-client, and tornado.websocket
 #
 import paho.mqtt.client as mqtt
 import sys
@@ -15,11 +17,12 @@ import time, threading, sched
 import socket
 import os
 from lib.Settings import Settings
+from lib.Constants import State, Event
 import logging
 import logging.handlers
 import websocket
 
-
+# Globals
 settings = None
 hmqtt = None
 applog = None
@@ -38,6 +41,13 @@ def mqtt_conn_init(st):
   hmqtt.subscribe(st.hsub_ctl)
   hmqtt.on_message = mqtt_message
   hmqtt.loop_start()
+  
+# Send to Mycroft message bus
+# TODO: check return codes
+def mycroft_send(msg):
+  ws = websocket.create_connection(settings.mycroft_uri)
+  ws.send(msg)
+  ws.close()
 
 def mqtt_message(client, userdata, message):
   global settings, applog
@@ -47,17 +57,15 @@ def mqtt_message(client, userdata, message):
   if topic == settings.hsub_say:
     mycroft_speak(payload)
   elif topic == settings.hsub_ask:
-    mycroft_query(payload)
+    mycroft_skill(payload)
   elif topic == settings.hsub_ctl:
     if payload == 'on':
       applog.info("Mycroft voice enabled")
       os.system('~/mycroft-core/start-mycroft.sh voice')
       time.sleep(1)
-      settings.myc_ws = websocket.create_connection(settings.mycroft_uri)
     elif payload == 'off':
       applog.info("Stopping Mycroft voice")
       os.system('~/mycroft-core/stop-mycroft.sh voice')
-      settings.myc_ws.close()
   else:
     applog.debug("unknown topic {}".format(topic))
     
@@ -72,14 +80,22 @@ def mycroft_speak(message):
     }
   })
   applog.info("speaking %s" % payload)
-  result = settings.myc_ws.send(payload)  
-  applog.debug("rtn: %s" % result)
-  print("Spk:", self.myc_conn.recv())
-  print("Spk:", self.myc_conn.recv())
+  mycroft_send(payload)  
   # enough time to get in the playing queue otherwise they go LIFO
   time.sleep(1) 
   return
+
+# skills are triggered by utterences
+def mycroft_skill(msg):
+  global settings, applog
+  applog.info("starting skill for: %s" % msg)
+  mycroft_type = 'recognizer_loop:utterance'
+  mycroft_data = '{"utterances": ["%s"]}' % msg
+  message = '{"type": "' + mycroft_type + '", "data": ' + mycroft_data + '}'
+  mycroft_send(message)
+  return
   
+# unused:
 def mycroft_query(msg):
   global settings, applog
   applog.info("starting query for: %s" % msg)
