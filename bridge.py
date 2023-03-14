@@ -23,7 +23,7 @@ import logging.handlers
 import asyncio
 import websockets
 import websocket
-	
+import pulsectl
 
 # Globals
 settings = None
@@ -59,21 +59,15 @@ def mqtt_message(client, userdata, message):
   global settings, applog, muted
   topic = message.topic
   payload = str(message.payload.decode("utf-8"))
-  applog.info("mqtt: {} => {}".format(topic,payload))
+  applog.info(f"mqtt: {topic} => {payload}")
   if topic == settings.hsub_say:
     mycroft_speak(payload)
   elif topic == settings.hsub_ask:
     mycroft_skill(payload)
   elif topic == settings.hsub_ctl:
-    isPi = os.uname()[4].startswith("arm")
-    if isPi:
-      home = '/home/pi'
-    else:
-      home = 'home/ccoupe'
     if payload == 'on' and muted == True:
+      '''
       applog.info("Mycroft voice enabled")
-      #os.system(f'{home}/mycroft-core/start-mycroft.sh voice')
-      #os.system(f'pacmd set-source-mute 1 0')
       mycroft_type = 'mycroft.mic.unmute'
       msg = json.dumps({
         "type": mycroft_type,
@@ -81,8 +75,13 @@ def mqtt_message(client, userdata, message):
         "data": {} 
       })
       mycroft_send(msg)
-      # mycroft needs to be told it can listen after unmute. When it works.
       '''
+      # Use pulseaudio to mute mic
+      applog.info('Pulseaudo enabled')
+      settings.pulse.source_mute(settings.microphone_index, 0)
+      settings.pulse.sink_mute(settings.speaker_index, 0)
+      '''
+      # mycroft needs to be told it can listen after unmute. When it works.
       time.sleep(0.1)
       mycroft_type = 'recognizer_loop:wake_up'
       #mycroft_type = 'mycroft.mic.listen'
@@ -96,6 +95,7 @@ def mqtt_message(client, userdata, message):
       muted = False
       #time.sleep(1)
     elif payload == 'off' and muted == False:
+      '''
       applog.info("Stopping Mycroft voice")
       #os.system(f'{home}/mycroft-core/stop-mycroft.sh voice')
       #os.system(f'pacmd set-source-mute 1 1')
@@ -106,6 +106,12 @@ def mqtt_message(client, userdata, message):
         "data": {} 
       })
       mycroft_send(msg)
+      '''
+      # Use pulseaudio to mute mic
+      applog.info('Pulseaudo disabled')
+      settings.pulse.source_mute(settings.microphone_index, 1)
+      settings.pulse.sink_mute(settings.speaker_index, 1)
+      
       muted = True
     elif payload == '?':
       mycroft_mute_status()
@@ -140,6 +146,7 @@ def mycroft_skill(msg):
   
 def mycroft_mute_status():
   global settings, applog, muted
+  '''
   mycroft_type = 'mycroft.mic.get_status'
   msg = json.dumps({
     "type": mycroft_type,
@@ -155,13 +162,24 @@ def mycroft_mute_status():
   #applog.info(f'qry3: {ws.recv()}') # {"type": "mycroft.mic.get_status.response", "data": {"muted": false}, "context": {}}
   js = ws.recv()
   dt = json.loads(js)
-  muted = dt['data']['muted']
-  applog.info(f'background check muted: {muted}')
+  # dt == {'type': 'mycroft-reminder.mycroftai:reminder', 'data': {}, 'context': {}}
+  # dt == {'type': 'mycroft-configuration.mycroftai:ConfigurationSkillupdate_remote', 'data': 'UpdateRemote', 'context': {}}
+  if isinstance(dt, dict):
+    data = dt['data']
+    if isinstance(data, dict):
+      if data.get('muted', None):
+        muted = dt['data']['muted']
+        applog.info(f'background check muted: {muted}')
+      else:
+        applog.info(f'response from mycroft.mic.get_status is empty: {dt}')
+  else:
+    applog.info(f'response from mycroft.mic.get_status malformed: {dt}')
   ws.close()
+  '''
   
 def long_timer_fired():
   global five_min_thread
-  mycroft_mute_status()
+  #mycroft_mute_status()
   five_min_thread = threading.Timer(5 * 60, long_timer_fired)
   five_min_thread.start()
 
@@ -187,6 +205,38 @@ def wss_server_init(st):
   wsadr = "ws://%s:5125/reply" % IPAddr
   applog.info(wsadr)
   wss_server = websockets.serve(wss_reply, IPAddr, 5125)
+
+def pulse_setup(settings):
+  pulse = pulsectl.Pulse('mqttmycroft')
+  for src in pulse.source_list():
+    if src.name == settings.microphone:
+      settings.microphone_index = src.index
+      settings.source = src
+      pulse.default_set(src)
+      applog.info(f'Microphone index = {settings.microphone_index}')
+  for sink in pulse.sink_list():
+    #applog.info(f'{sink.name} =? {settings.speaker}')
+    if sink.name == settings.speaker:
+      settings.speaker_index = sink.index
+      settings.sink = sink
+      pulse.default_set(sink)
+      applog.info(f'Speaker index = {settings.speaker_index}')
+        
+  if settings.microphone_index is None:
+    applog.error('Missing or bad Microphone setting')
+    exit()
+  else:
+    pulse.volume_set_all_chans(settings.source, settings.microphone_volume)
+    
+  if settings.speaker_index is None:
+    applog.error('Missing or bad Speaker setting')
+    exit()
+  else:
+    pulse.volume_set_all_chans(settings.sink, settings.speaker_volume)
+    
+  # save the pulse object so we can call it later.
+  settings.pulse = pulse
+
 
     
 def main():
@@ -219,6 +269,8 @@ def main():
                       applog)
   settings.print()
   mqtt_conn_init(settings)
+  # here would be a place to setup pulseaudio (scripts?)
+  pulse_setup(settings)
   wss_server_init(settings)
   five_min_timer()
   asyncio.get_event_loop().run_until_complete(wss_server)

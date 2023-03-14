@@ -19,6 +19,15 @@ class Settings:
     self.mqtt_port = conf.get("mqtt_port", 1883)
     self.mqtt_client_name = conf.get("mqtt_client_name", "trumpy_bridge")
     self.homie_device = conf.get('homie_device', 'trumpy_cam')
+    self.pulse = None
+    self.microphone = conf.get('microphone', None)
+    self.microphone_volume = conf.get('microphone_volume', 0.5)
+    self.microphone_index = None
+    self.mic = None
+    self.speaker = conf.get('speaker', None)
+    self.speaker_volume = conf.get('speaker_volume', 0.5)
+    self.speaker_index = None
+    self.spkr = None
     self.bridge_ip = conf.get('bridge_ip', '192.168.1.2')
     self.bridge_port = conf.get('bridge_port', 8281)
     # its required that the bridge runs on the mycroft device
