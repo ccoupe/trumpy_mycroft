@@ -1,0 +1,20 @@
+{
+  "mqtt_server_ip": "stoic.local",
+  "mqtt_port": 1883,
+  "mqtt_client_name": "test_bridge",
+  "homie_device": "test_bear",
+  "bridge_ip": "pi4.local",
+  "bridge_port": 8281,
+  "engine": "glados",
+  "glados": {
+  	"tts_url": "http://bronco.local:8124/synthesize/"
+  },
+  "mycroft": { 
+	"tts_url": "http://bronco.local:8124/synthesize/"
+  },
+  "microphone": "alsa_input.usb-GHW_Micro_GHW_USB_AUDIO_2020-02-20-0000-0000-0000--00.mono-fallback",
+  "microphone_volume": 0.73,
+  "speaker": "bluez_sink.C2_08_9A_CB_33_0C.a2dp_sink",
+  "speaker_volume": 0.69
+
+}

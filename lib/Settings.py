@@ -30,7 +30,14 @@ class Settings:
     self.spkr = None
     self.bridge_ip = conf.get('bridge_ip', '192.168.1.2')
     self.bridge_port = conf.get('bridge_port', 8281)
-    # its required that the bridge runs on the mycroft device
+    self.engine_nm = conf.get("engine", None)
+    engine_dt = conf.get(self.engine_nm, {})
+    self.tts_url = engine_dt.get('tts_url', None)
+    
+    self.mic_pub_type = conf.get('mic_pub_type', 'notify')  # or 'login'
+    self.mic_pub_topic = conf.get('mic_pub_topic', 'homie/pi4_screen/screen/display/text/set')
+    # its required that the bridge runs on the mycroft device (if mycroft)
+    # because it likes to manage pulseaudio (and alsa) too.
     self.mycroft_uri = 'ws://' + self.bridge_ip + ':8181/core'
 
 
@@ -47,6 +54,7 @@ class Settings:
     st['bridge_ip'] = self.bridge_ip
     st['bridge_port'] = self.bridge_port
     st['mycroft_uri'] = self.mycroft_uri
+    st['tts_url'] = self.tts_url
     str = json.dumps(st)
     return str
 

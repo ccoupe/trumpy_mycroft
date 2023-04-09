@@ -1,0 +1,10 @@
+[Unit]
+Description=MQTT Audio Bridge
+After=pulseaudio.service
+
+[Service]
+ExecStart=/usr/local/lib/mqttaudio/mqttaudio.sh
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target
